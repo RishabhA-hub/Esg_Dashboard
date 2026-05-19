@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESG Intelligence Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&f[]=cabinet-grotesk@500,700,800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['class', '[data-theme="dark"]'],
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Satoshi', 'Inter', 'sans-serif'],
+            display: ['Cabinet Grotesk', 'Satoshi', 'sans-serif']
+          },
+          colors: {
+            ink: '#0f172a',
+            panel: '#111827',
+            line: '#1f2937',
+            brand: '#14b8a6',
+            success: '#22c55e',
+            warn: '#f59e0b',
+            danger: '#ef4444'
+          },
+          boxShadow: {
+            glow: '0 10px 30px rgba(20,184,166,0.16)',
+            soft: '0 12px 36px rgba(15,23,42,0.22)'
+          },
+          keyframes: {
+            floaty: {
+              '0%,100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-4px)' }
+            },
+            shimmer: {
+              '0%': { backgroundPosition: '-200% 0' },
+              '100%': { backgroundPosition: '200% 0' }
+            }
+          },
+          animation: {
+            floaty: 'floaty 4s ease-in-out infinite',
+            shimmer: 'shimmer 1.8s linear infinite'
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6fbff;
+      --bg-soft: rgba(255,255,255,0.78);
+      --panel: rgba(255,255,255,0.80);
+      --panel-2: rgba(255,255,255,0.94);
+      --stroke: rgba(15, 23, 42, 0.08);
+      --text: #0f172a;
+      --muted: #475569;
+      --brand: #14b8a6;
+      --brand-2: #38bdf8;
+      --success: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --radius: 22px;
+    }
+    [data-theme="light"] {
+      --bg: #eef4fb;
+      --bg-soft: rgba(255,255,255,0.75);
+      --panel: rgba(255,255,255,0.78);
+      --panel-2: rgba(248,250,252,0.92);
+      --stroke: rgba(15, 23, 42, 0.08);
+      --text: #0f172a;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: 'Satoshi', sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(20,184,166,0.18), transparent 30%),
+        radial-gradient(circle at top right, rgba(59,130,246,0.16), transparent 28%),
+        linear-gradient(180deg, #ffffff, #eef7fb 58%, #e8f5f2 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    [data-theme="light"] body {
+      background:
+        radial-gradient(circle at top left, rgba(20,184,166,0.10), transparent 30%),
+        radial-gradient(circle at top right, rgba(59,130,246,0.10), transparent 30%),
+        linear-gradient(180deg, #f8fbff, #eef4fb 68%);
+    }
+    .glass {
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+    }
+    .glass-strong {
+      background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(248,250,252,0.92));
+      border: 1px solid var(--stroke);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .soft-accent { background: linear-gradient(135deg, rgba(20,184,166,0.10), rgba(59,130,246,0.08)); }
+    .chart-box { min-height: 320px; }
+    .chart-box.tall { min-height: 380px; }
+    .nav-link.active,
+    .nav-link:hover {
+      background: linear-gradient(135deg, rgba(20,184,166,0.14), rgba(56,189,248,0.10));
+      color: #0f172a;
+      border-color: rgba(45,212,191,0.28);
+      transform: translateX(4px);
+    }
+    [data-theme="light"] .nav-link.active,
+    [data-theme="light"] .nav-link:hover { color: #0f172a; }
+    .kpi-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 40px rgba(20,184,166,0.10); }
+    .progress-track { background: rgba(148,163,184,0.14); }
+    .insight-positive { border-left: 3px solid rgba(34,197,94,0.8); }
+    .insight-alert { border-left: 3px solid rgba(245,158,11,0.85); }
+    .insight-risk { border-left: 3px solid rgba(239,68,68,0.85); }
+    .modal-backdrop { background: rgba(255, 255, 255, 0.55); }
+    .heatmap-grid { display:grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
+    .heat-cell { min-height: 58px; border-radius: 16px; border: 1px solid var(--stroke); display:flex; align-items:center; justify-content:center; font-size: 12px; color: #334155; text-align:center; padding: 8px; }
+    .landing-screen { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, rgba(20,184,166,0.10), transparent 30%), rgba(239,246,255,0.92); backdrop-filter: blur(18px); }
+    .hidden-screen { opacity: 0; pointer-events: none; transition: opacity .4s ease; }
+    .metric-number { font-variant-numeric: tabular-nums; }
+    .section-panel { scroll-margin-top: 96px; }
+    .custom-range::-webkit-slider-thumb { -webkit-appearance: none; appearance:none; width:18px; height:18px; border-radius:999px; background:#14b8a6; border:2px solid white; box-shadow:0 0 0 4px rgba(20,184,166,.24); }
+    .custom-range::-moz-range-thumb { width:18px; height:18px; border:none; border-radius:999px; background:#14b8a6; box-shadow:0 0 0 4px rgba(20,184,166,.24); }
+    @media (max-width: 1024px) {
+      .app-shell { grid-template-columns: 1fr; }
+      aside { position: static !important; height: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#mainContent" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-teal-500 text-slate-950 px-4 py-2 rounded-full z-50">Skip to content</a>
+
+  <div id="landingScreen" class="landing-screen">
+    <div class="glass rounded-[28px] p-8 md:p-10 max-w-2xl w-[92%] text-center border border-slate-200/80">
+      <div class="inline-flex items-center gap-3 px-4 py-2 rounded-full border border-slate-200/80 bg-white/70 text-slate-200 text-sm mb-6">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        ESG Intelligence Suite
+      </div>
+      <h1 class="font-display text-4xl md:text-6xl font-extrabold tracking-tight mb-4">Enterprise ESG analytics with boardroom-grade clarity.</h1>
+      <p class="text-slate-600 max-w-2xl mx-auto text-base md:text-lg mb-8">Rebuilt as a premium intelligence workspace with scenario modeling, benchmarking, risk analytics, and export-ready reporting.</p>
+      <div class="flex flex-col sm:flex-row justify-center gap-4">
+        <button id="enterDashboardBtn" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-teal-400 to-cyan-400 text-white font-bold shadow-glow hover:scale-[1.02] transition">Enter Dashboard</button>
+        <button id="previewMetricsBtn" class="px-6 py-3 rounded-2xl border border-slate-200/80 bg-white/70 text-slate-900 hover:bg-teal-50 transition">Preview Intelligence Layer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-shell grid grid-cols-[280px_1fr] gap-6 p-4 lg:p-6 max-w-[1800px] mx-auto">
+    <aside class="glass rounded-[28px] p-5 lg:p-6 sticky top-4 h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between gap-3 mb-8">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-400 to-cyan-400 text-slate-950 flex items-center justify-center shadow-glow">
+            <svg viewBox="0 0 40 40" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.6" aria-label="ESG Intelligence logo"><path d="M7 28c6-1 7-10 12-14 5-4 11-1 14-8"/><path d="M8 14c6 0 10 4 12 9 2 4 5 7 12 7"/></svg>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-[0.28em] text-slate-500">ESG</p>
+            <h2 class="font-display text-xl font-bold">Intelligence</h2>
+          </div>
+        </div>
+        <button id="themeToggle" aria-label="Toggle theme" class="w-11 h-11 rounded-2xl border border-slate-200/80 bg-white/70 flex items-center justify-center hover:bg-teal-50 transition"></button>
+      </div>
+
+      <nav class="space-y-2 mb-6" aria-label="Sidebar navigation">
+        <a href="#overview" class="nav-link active flex items-center gap-3 px-4 py-3 rounded-2xl border border-transparent text-slate-700 transition" data-nav><i data-lucide="layout-dashboard" class="w-4 h-4"></i><span>Executive Overview</span></a>
+        <a href="#environmental" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl border border-transparent text-slate-700 transition" data-nav><i data-lucide="leaf" class="w-4 h-4"></i><span>Environmental</span></a>
+        <a href="#social" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl border border-transparent text-slate-700 transition" data-nav><i data-lucide="users" class="w-4 h-4"></i><span>Social</span></a>
+        <a href="#governance" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl border border-transparent text-slate-700 transition" data-nav><i data-lucide="shield-check" class="w-4 h-4"></i><span>Governance & Risk</span></a>
+        <a href="#benchmarking" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl border border-transparent text-slate-700 transition" data-nav><i data-lucide="line-chart" class="w-4 h-4"></i><span>Benchmarking</span></a>
+        <a href="#targets" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl border border-transparent text-slate-700 transition" data-nav><i data-lucide="rocket" class="w-4 h-4"></i><span>Targets & Scenarios</span></a>
+      </nav>
+
+      <div class="glass-strong rounded-[24px] p-4 mb-5">
+        <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Maturity score</p>
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <div id="maturityScore" class="metric-number text-4xl font-display font-extrabold">--</div>
+            <p id="maturityLabel" class="text-sm text-slate-500 mt-1">Calculating...</p>
+          </div>
+          <div class="w-14 h-14 rounded-2xl bg-teal-400/10 text-teal-300 flex items-center justify-center animate-floaty">
+            <i data-lucide="sparkles" class="w-6 h-6"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-auto glass-strong rounded-[24px] p-4">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-sm font-semibold">Exports</p>
+          <i data-lucide="download" class="w-4 h-4 text-slate-500"></i>
+        </div>
+        <div class="grid grid-cols-1 gap-3">
+          <button id="exportPdfBtn" class="px-4 py-3 rounded-2xl bg-white/70 border border-slate-200/80 text-left hover:bg-teal-50 transition">Download ESG summary PDF</button>
+          <button id="exportExcelBtn" class="px-4 py-3 rounded-2xl bg-white/70 border border-slate-200/80 text-left hover:bg-teal-50 transition">Export analytics workbook</button>
+        </div>
+      </div>
+    </aside>
+
+    <main id="mainContent" class="space-y-6 lg:space-y-7 pb-10">
+      <section id="overview" class="section-panel glass rounded-[30px] p-5 md:p-7 lg:p-8 overflow-hidden relative">
+        <div class="absolute -top-20 right-0 w-72 h-72 rounded-full bg-teal-400/10 blur-3xl"></div>
+        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 mb-7 relative z-10">
+          <div>
+            <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-2">Executive Overview</p>
+            <h1 class="font-display text-3xl md:text-4xl font-extrabold tracking-tight mb-2">Modern ESG intelligence for enterprise decisions.</h1>
+            <p class="text-slate-500 max-w-3xl">Track performance, diagnose weak spots, benchmark against industry peers, and simulate decarbonization pathways from a single decision cockpit.</p>
+          </div>
+          <div class="flex flex-wrap gap-3 items-center">
+            <div class="glass-strong rounded-2xl px-4 py-3 min-w-[180px]">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Reporting alignment</p>
+              <p class="font-semibold mt-1">GRI · BRSR · TCFD · ISSB</p>
+            </div>
+            <div class="glass-strong rounded-2xl px-4 py-3 min-w-[180px]">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Decision status</p>
+              <p id="readinessBadge" class="font-semibold mt-1">Loading...</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <button class="kpi-card glass-strong rounded-[24px] p-5 text-left transition duration-300" data-kpi="esgScore">
+            <div class="flex items-center justify-between mb-4"><span class="text-sm text-slate-500">Composite ESG score</span><i data-lucide="gauge" class="w-5 h-5 text-teal-300"></i></div>
+            <div id="kpiEsgScore" class="metric-number text-4xl font-display font-extrabold mb-2">--</div>
+            <p id="kpiEsgDelta" class="text-sm text-emerald-300">Calculating...</p>
+          </button>
+          <button class="kpi-card glass-strong rounded-[24px] p-5 text-left transition duration-300" data-kpi="emissions">
+            <div class="flex items-center justify-between mb-4"><span class="text-sm text-slate-500">Total emissions</span><i data-lucide="cloud" class="w-5 h-5 text-cyan-300"></i></div>
+            <div id="kpiEmissions" class="metric-number text-4xl font-display font-extrabold mb-2">--</div>
+            <p id="kpiEmissionsNote" class="text-sm text-slate-500">tCO2e across scopes</p>
+          </button>
+          <button class="kpi-card glass-strong rounded-[24px] p-5 text-left transition duration-300" data-kpi="roi">
+            <div class="flex items-center justify-between mb-4"><span class="text-sm text-slate-500">ESG ROI</span><i data-lucide="badge-dollar-sign" class="w-5 h-5 text-amber-300"></i></div>
+            <div id="kpiRoi" class="metric-number text-4xl font-display font-extrabold mb-2">--</div>
+            <p id="kpiRoiNote" class="text-sm text-slate-500">Business value capture</p>
+          </button>
+          <button class="kpi-card glass-strong rounded-[24px] p-5 text-left transition duration-300" data-kpi="criticalRisk">
+            <div class="flex items-center justify-between mb-4"><span class="text-sm text-slate-500">Critical risks</span><i data-lucide="triangle-alert" class="w-5 h-5 text-rose-300"></i></div>
+            <div id="kpiCriticalRisks" class="metric-number text-4xl font-display font-extrabold mb-2">--</div>
+            <p id="kpiRiskNote" class="text-sm text-slate-500">Top heatmap exposures</p>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-5">
+          <div class="glass-strong rounded-[26px] p-5 md:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <p class="text-sm font-semibold">Dynamic filters</p>
+                <p class="text-sm text-slate-500">Switch views across years, regions, and business units.</p>
+              </div>
+              <div class="text-xs text-slate-500 inline-flex items-center gap-2"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i> Live update</div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="block">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2 block">Year</span>
+                <select id="yearFilter" class="w-full rounded-2xl px-4 py-3 bg-white/70 border border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-teal-400/50"></select>
+              </label>
+              <label class="block">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2 block">Region</span>
+                <select id="regionFilter" class="w-full rounded-2xl px-4 py-3 bg-white/70 border border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-teal-400/50"></select>
+              </label>
+              <label class="block">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2 block">Business unit</span>
+                <select id="businessFilter" class="w-full rounded-2xl px-4 py-3 bg-white/70 border border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-teal-400/50"></select>
+              </label>
+            </div>
+          </div>
+          <div class="glass-strong rounded-[26px] p-5 md:p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <p class="text-sm font-semibold">AI recommendations</p>
+                <p class="text-sm text-slate-500">Actionable next-best moves.</p>
+              </div>
+              <i data-lucide="bot" class="w-5 h-5 text-teal-300"></i>
+            </div>
+            <ul id="recommendationsList" class="space-y-3 text-sm text-slate-700"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="environmental" class="section-panel grid grid-cols-1 2xl:grid-cols-[1.35fr_.65fr] gap-6">
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-2">Environmental Analytics</p>
+              <h2 class="font-display text-2xl md:text-3xl font-bold">Emissions intelligence</h2>
+            </div>
+            <div class="text-sm text-slate-500">Scope mix, intensity trends, and decarbonization trajectory</div>
+          </div>
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div class="glass-strong rounded-[24px] p-4 md:p-5">
+              <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">Scope 1, 2, 3 breakdown</h3><span class="text-xs text-slate-500">Stacked view</span></div>
+              <div id="scopeChart" class="chart-box"></div>
+            </div>
+            <div class="glass-strong rounded-[24px] p-4 md:p-5">
+              <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">Emissions intensity trend</h3><span class="text-xs text-slate-500">tCO2e / revenue proxy</span></div>
+              <div id="intensityChart" class="chart-box"></div>
+            </div>
+            <div class="glass-strong rounded-[24px] p-4 md:p-5 xl:col-span-2">
+              <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">Reduction trajectory vs net zero pathway</h3><span class="text-xs text-slate-500">Target year projection</span></div>
+              <div id="trajectoryChart" class="chart-box tall"></div>
+            </div>
+          </div>
+        </div>
+        <div class="glass rounded-[30px] p-5 md:p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Insights panel</p>
+              <h3 class="font-display text-2xl font-bold">Auto-generated signals</h3>
+            </div>
+            <i data-lucide="sparkles" class="w-5 h-5 text-teal-300"></i>
+          </div>
+          <div id="insightsPanel" class="space-y-3"></div>
+        </div>
+      </section>
+
+      <section id="social" class="section-panel grid grid-cols-1 xl:grid-cols-[1.1fr_.9fr] gap-6">
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-2">Social Intelligence</p>
+              <h2 class="font-display text-2xl md:text-3xl font-bold">Workforce, inclusion, and safety</h2>
+            </div>
+            <div class="text-sm text-slate-500">ESG performance linked to people outcomes</div>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div class="glass-strong rounded-[24px] p-4 md:p-5">
+              <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">Social score decomposition</h3><span class="text-xs text-slate-500">Weighted score radar</span></div>
+              <div id="socialRadarChart" class="chart-box"></div>
+            </div>
+            <div class="glass-strong rounded-[24px] p-4 md:p-5">
+              <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">ESG contribution waterfall</h3><span class="text-xs text-slate-500">Drivers of score</span></div>
+              <div id="waterfallChart" class="chart-box"></div>
+            </div>
+          </div>
+        </div>
+        <div class="glass rounded-[30px] p-5 md:p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Business linkage</p>
+              <h3 class="font-display text-2xl font-bold">ESG ROI & impact</h3>
+            </div>
+            <i data-lucide="briefcase-business" class="w-5 h-5 text-cyan-300"></i>
+          </div>
+          <div id="roiChart" class="chart-box mb-5"></div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="glass-strong rounded-[22px] p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Human capital signal</p>
+              <div id="humanCapitalMetric" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+              <p class="text-sm text-slate-500 mt-2">Composite of employee wellbeing, retention, and diversity.</p>
+            </div>
+            <div class="glass-strong rounded-[22px] p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Productivity uplift proxy</p>
+              <div id="productivityMetric" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+              <p class="text-sm text-slate-500 mt-2">Estimated based on social performance vs baseline.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="governance" class="section-panel grid grid-cols-1 2xl:grid-cols-[1fr_1fr] gap-6">
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-2">Governance & Risk</p>
+              <h2 class="font-display text-2xl md:text-3xl font-bold">Dynamic risk matrix</h2>
+            </div>
+            <div class="text-sm text-slate-500">Likelihood × impact mapping with critical-risk ranking</div>
+          </div>
+          <div class="glass-strong rounded-[24px] p-4 md:p-5 mb-5">
+            <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">Risk heatmap</h3><span class="text-xs text-slate-500">Interactive matrix</span></div>
+            <div class="grid grid-cols-[auto_1fr] gap-4 items-start">
+              <div class="text-xs text-slate-500 [writing-mode:vertical-rl] rotate-180 pt-2">Impact</div>
+              <div>
+                <div id="riskHeatmap" class="heatmap-grid mb-3"></div>
+                <div class="text-xs text-slate-500 text-center">Likelihood</div>
+              </div>
+            </div>
+          </div>
+          <div class="glass-strong rounded-[24px] p-4 md:p-5">
+            <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">Top 5 critical risks</h3><span class="text-xs text-slate-500">Auto-prioritized</span></div>
+            <div id="topRisksList" class="space-y-3"></div>
+          </div>
+        </div>
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Governance score</p>
+              <h3 class="font-display text-2xl md:text-3xl font-bold">Control architecture</h3>
+            </div>
+            <div class="text-sm text-slate-500">Policies, board oversight, ethics, and assurance</div>
+          </div>
+          <div id="governanceChart" class="chart-box mb-5"></div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="glass-strong rounded-[22px] p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Board oversight index</p>
+              <div id="boardMetric" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+            </div>
+            <div class="glass-strong rounded-[22px] p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Governance confidence</p>
+              <div id="confidenceMetric" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="benchmarking" class="section-panel grid grid-cols-1 2xl:grid-cols-[1fr_1fr] gap-6">
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-2">Benchmarking & Peer Comparison</p>
+              <h2 class="font-display text-2xl md:text-3xl font-bold">Industry context</h2>
+            </div>
+            <div class="text-sm text-slate-500">Percentile ranking and peer spread</div>
+          </div>
+          <div id="benchmarkChart" class="chart-box mb-5"></div>
+          <div class="glass-strong rounded-[24px] p-4 md:p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Percentile rank</p>
+                <div id="percentileRank" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Gap to industry average</p>
+                <div id="industryGap" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Peer position</p>
+                <div id="peerPosition" class="metric-number text-3xl font-display font-extrabold mt-2">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Benchmark table</p>
+              <h3 class="font-display text-2xl font-bold">Peer landscape</h3>
+            </div>
+            <i data-lucide="building-2" class="w-5 h-5 text-teal-300"></i>
+          </div>
+          <div class="overflow-auto rounded-[22px] border border-slate-200/80">
+            <table class="min-w-full text-sm">
+              <thead class="bg-white/70 text-slate-700">
+                <tr>
+                  <th class="text-left px-4 py-3">Entity</th>
+                  <th class="text-left px-4 py-3">ESG Score</th>
+                  <th class="text-left px-4 py-3">Difference</th>
+                  <th class="text-left px-4 py-3">Position</th>
+                </tr>
+              </thead>
+              <tbody id="benchmarkTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="targets" class="section-panel grid grid-cols-1 2xl:grid-cols-[1.05fr_.95fr] gap-6">
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-2">Targets & Scenario Analysis</p>
+              <h2 class="font-display text-2xl md:text-3xl font-bold">Forward view</h2>
+            </div>
+            <div class="text-sm text-slate-500">Target tracking with linear projection and what-if simulation</div>
+          </div>
+          <div class="glass-strong rounded-[24px] p-4 md:p-5 mb-5">
+            <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">Target progress tracker</h3><span class="text-xs text-slate-500">Current vs target</span></div>
+            <div id="targetsContainer" class="space-y-4"></div>
+          </div>
+          <div class="glass-strong rounded-[24px] p-4 md:p-5">
+            <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">Forecast achievement</h3><span class="text-xs text-slate-500">Linear projection</span></div>
+            <div id="forecastChart" class="chart-box"></div>
+          </div>
+        </div>
+        <div class="glass rounded-[30px] p-5 md:p-7">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Scenario lab</p>
+              <h3 class="font-display text-2xl font-bold">Renewable energy what-if</h3>
+            </div>
+            <i data-lucide="sliders" class="w-5 h-5 text-cyan-300"></i>
+          </div>
+          <div class="glass-strong rounded-[24px] p-5 mb-5">
+            <div class="flex items-center justify-between gap-4 mb-4">
+              <div>
+                <p class="text-sm font-semibold">Increase renewable energy share</p>
+                <p class="text-sm text-slate-500">Model the effect on Scope 2 emissions and total carbon footprint.</p>
+              </div>
+              <div id="renewableLabel" class="text-3xl font-display font-extrabold">0%</div>
+            </div>
+            <input id="renewableSlider" type="range" min="0" max="100" value="0" class="custom-range w-full h-2 rounded-full bg-white/10 appearance-none cursor-pointer">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+              <div class="glass rounded-[20px] p-4">
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Adjusted Scope 2</p>
+                <div id="scenarioScope2" class="metric-number text-2xl font-display font-extrabold mt-2">--</div>
+              </div>
+              <div class="glass rounded-[20px] p-4">
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Adjusted total emissions</p>
+                <div id="scenarioTotal" class="metric-number text-2xl font-display font-extrabold mt-2">--</div>
+              </div>
+              <div class="glass rounded-[20px] p-4">
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Reduction vs baseline</p>
+                <div id="scenarioReduction" class="metric-number text-2xl font-display font-extrabold mt-2">--</div>
+              </div>
+            </div>
+          </div>
+          <div class="glass-strong rounded-[24px] p-4 md:p-5">
+            <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">Scenario impact chart</h3><span class="text-xs text-slate-500">Live recalculation</span></div>
+            <div id="scenarioChart" class="chart-box"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="kpiModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-backdrop">
+    <div class="glass rounded-[28px] max-w-2xl w-full p-6 md:p-7 relative">
+      <button id="closeModalBtn" class="absolute top-4 right-4 w-11 h-11 rounded-2xl bg-white/70 border border-slate-200/80 flex items-center justify-center hover:bg-teal-50 transition" aria-label="Close details"><i data-lucide="x" class="w-5 h-5"></i></button>
+      <p class="text-xs uppercase tracking-[0.24em] text-slate-500 mb-2">Drill-down</p>
+      <h3 id="modalTitle" class="font-display text-3xl font-bold mb-3">Metric breakdown</h3>
+      <p id="modalDescription" class="text-slate-500 mb-5">Details will appear here.</p>
+      <div id="modalBody" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    const state = {
+      raw: null,
+      selectedYear: null,
+      selectedRegion: 'Global',
+      selectedBusiness: 'Enterprise',
+      charts: {},
+      uiTheme: 'dark'
+    };
+
+    const fallbackData = {
+      company: 'Aurora Sustainable Industries',
+      years: [2022, 2023, 2024, 2025],
+      filters: {
+        regions: ['Global', 'APAC', 'EMEA', 'Americas'],
+        businessUnits: ['Enterprise', 'Manufacturing', 'Consumer', 'Energy Solutions']
+      },
+      kpis: {
+        esgScore: 78,
+        environmental: 81,
+        social: 74,
+        governance: 79,
+        esgROI: 2.7,
+        industryAverage: 84,
+        previousEsgScore: 74
+      },
+      environmental: {
+        scopeEmissions: { scope1: 7200, scope2: 4100, scope3: 18600 },
+        yearlyEmissions: [36400, 33300, 31900, 29900],
+        yearlyIntensity: [0.79, 0.74, 0.69, 0.61],
+        netZeroTargetYear: 2040,
+        baselineYear: 2022,
+        renewableEnergy: 38,
+        targetReductionPct: 55
+      },
+      social: {
+        employeeWellbeing: 76,
+        diversityInclusion: 71,
+        trainingDevelopment: 83,
+        healthSafety: 79,
+        retention: 81
+      },
+      governance: {
+        boardOversight: 84,
+        ethicsCompliance: 80,
+        cyberRisk: 69,
+        policyMaturity: 77,
+        assurance: 74
+      },
+      risks: [
+        { name: 'Supply chain emissions regulation', likelihood: 5, impact: 5, category: 'Environmental' },
+        { name: 'Water stress at manufacturing clusters', likelihood: 4, impact: 4, category: 'Environmental' },
+        { name: 'Workplace safety incident', likelihood: 3, impact: 5, category: 'Social' },
+        { name: 'Data privacy breach', likelihood: 4, impact: 5, category: 'Governance' },
+        { name: 'Board independence scrutiny', likelihood: 3, impact: 4, category: 'Governance' },
+        { name: 'Diversity attrition gap', likelihood: 4, impact: 3, category: 'Social' }
+      ],
+      targets: [
+        { name: 'Reduce total emissions', current: 18, target: 55, unit: '%', deadline: 2030 },
+        { name: 'Renewable energy adoption', current: 38, target: 75, unit: '%', deadline: 2030 },
+        { name: 'Women in leadership', current: 34, target: 45, unit: '%', deadline: 2028 },
+        { name: 'Independent board representation', current: 62, target: 75, unit: '%', deadline: 2027 }
+      ],
+      benchmarking: [
+        { entity: 'Aurora Sustainable Industries', score: 78 },
+        { entity: 'Industrial Manufacturing', score: 84 },
+        { entity: 'Energy Transition', score: 88 },
+        { entity: 'Consumer Goods', score: 73 },
+        { entity: 'Technology Services', score: 81 }
+      ]
+    };
+
+    const els = {
+      yearFilter: document.getElementById('yearFilter'),
+      regionFilter: document.getElementById('regionFilter'),
+      businessFilter: document.getElementById('businessFilter'),
+      insightsPanel: document.getElementById('insightsPanel'),
+      recommendationsList: document.getElementById('recommendationsList'),
+      targetsContainer: document.getElementById('targetsContainer'),
+      benchmarkTableBody: document.getElementById('benchmarkTableBody'),
+      riskHeatmap: document.getElementById('riskHeatmap'),
+      topRisksList: document.getElementById('topRisksList'),
+      kpiModal: document.getElementById('kpiModal'),
+      modalTitle: document.getElementById('modalTitle'),
+      modalDescription: document.getElementById('modalDescription'),
+      modalBody: document.getElementById('modalBody'),
+      renewableSlider: document.getElementById('renewableSlider'),
+      renewableLabel: document.getElementById('renewableLabel'),
+      landingScreen: document.getElementById('landingScreen')
+    };
+
+    const formatNumber = (value, decimals = 0) => Number(value).toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: decimals });
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+    function deepFindValue(obj, keys = []) {
+      for (const key of keys) {
+        if (obj && typeof obj === 'object' && key in obj) return obj[key];
+      }
+      return undefined;
+    }
+
+    function hydrateData(data) {
+      const src = data && Object.keys(data).length ? data : fallbackData;
+      const years = src.years || deepFindValue(src, ['yearRange']) || fallbackData.years;
+      const kpis = src.kpis || src.scores || {};
+      const env = src.environmental || src.environment || {};
+      const soc = src.social || {};
+      const gov = src.governance || {};
+      const benchmark = src.benchmarking || src.peerComparison || fallbackData.benchmarking;
+      const risks = src.risks || src.riskAnalytics || fallbackData.risks;
+      const targets = src.targets || src.targetTracking || fallbackData.targets;
+      return {
+        company: src.company || src.organization || fallbackData.company,
+        years,
+        filters: src.filters || fallbackData.filters,
+        kpis: {
+          esgScore: Number(kpis.esgScore || kpis.overall || src.esgScore || fallbackData.kpis.esgScore),
+          environmental: Number(kpis.environmental || kpis.environment || src.environmentalScore || fallbackData.kpis.environmental),
+          social: Number(kpis.social || src.socialScore || fallbackData.kpis.social),
+          governance: Number(kpis.governance || src.governanceScore || fallbackData.kpis.governance),
+          esgROI: Number(kpis.esgROI || src.esgROI || fallbackData.kpis.esgROI),
+          industryAverage: Number(kpis.industryAverage || src.industryAverage || fallbackData.kpis.industryAverage),
+          previousEsgScore: Number(kpis.previousEsgScore || src.previousEsgScore || fallbackData.kpis.previousEsgScore)
+        },
+        environmental: {
+          scopeEmissions: env.scopeEmissions || src.scopeEmissions || fallbackData.environmental.scopeEmissions,
+          yearlyEmissions: env.yearlyEmissions || src.yearlyEmissions || fallbackData.environmental.yearlyEmissions,
+          yearlyIntensity: env.yearlyIntensity || src.yearlyIntensity || fallbackData.environmental.yearlyIntensity,
+          netZeroTargetYear: Number(env.netZeroTargetYear || src.netZeroTargetYear || fallbackData.environmental.netZeroTargetYear),
+          baselineYear: Number(env.baselineYear || src.baselineYear || fallbackData.environmental.baselineYear),
+          renewableEnergy: Number(env.renewableEnergy || src.renewableEnergy || fallbackData.environmental.renewableEnergy),
+          targetReductionPct: Number(env.targetReductionPct || src.targetReductionPct || fallbackData.environmental.targetReductionPct)
+        },
+        social: {
+          employeeWellbeing: Number(soc.employeeWellbeing || soc.wellbeing || fallbackData.social.employeeWellbeing),
+          diversityInclusion: Number(soc.diversityInclusion || soc.diversity || fallbackData.social.diversityInclusion),
+          trainingDevelopment: Number(soc.trainingDevelopment || soc.training || fallbackData.social.trainingDevelopment),
+          healthSafety: Number(soc.healthSafety || soc.safety || fallbackData.social.healthSafety),
+          retention: Number(soc.retention || fallbackData.social.retention)
+        },
+        governance: {
+          boardOversight: Number(gov.boardOversight || gov.board || fallbackData.governance.boardOversight),
+          ethicsCompliance: Number(gov.ethicsCompliance || gov.ethics || fallbackData.governance.ethicsCompliance),
+          cyberRisk: Number(gov.cyberRisk || gov.cyber || fallbackData.governance.cyberRisk),
+          policyMaturity: Number(gov.policyMaturity || gov.policy || fallbackData.governance.policyMaturity),
+          assurance: Number(gov.assurance || fallbackData.governance.assurance)
+        },
+        risks,
+        targets,
+        benchmarking: benchmark
+      };
+    }
+
+    async function loadData() {
+      try {
+        const res = await fetch('./dashboard_data.json');
+        const json = await res.json();
+        state.raw = hydrateData(json);
+      } catch (error) {
+        console.warn('Using fallback dataset', error);
+        state.raw = hydrateData(fallbackData);
+      }
+      state.selectedYear = state.raw.years.at(-1);
+    }
+
+    function initFilters() {
+      const { years, filters } = state.raw;
+      const fill = (el, items, selected) => {
+        el.innerHTML = items.map(v => `<option value="${v}">${v}</option>`).join('');
+        el.value = selected;
+      };
+      fill(els.yearFilter, years, state.selectedYear);
+      fill(els.regionFilter, filters?.regions || fallbackData.filters.regions, state.selectedRegion);
+      fill(els.businessFilter, filters?.businessUnits || fallbackData.filters.businessUnits, state.selectedBusiness);
+      [els.yearFilter, els.regionFilter, els.businessFilter].forEach(el => el.addEventListener('change', () => {
+        state.selectedYear = Number(els.yearFilter.value);
+        state.selectedRegion = els.regionFilter.value;
+        state.selectedBusiness = els.businessFilter.value;
+        renderAll();
+      }));
+    }
+
+    function getDerivedMetrics() {
+      const d = state.raw;
+      const envWeight = 0.4, socWeight = 0.3, govWeight = 0.3;
+      const weightedScore = d.kpis.environmental * envWeight + d.kpis.social * socWeight + d.kpis.governance * govWeight;
+      const totalEmissions = Object.values(d.environmental.scopeEmissions).reduce((a, b) => a + Number(b || 0), 0);
+      const scope3Share = totalEmissions ? (d.environmental.scopeEmissions.scope3 / totalEmissions) * 100 : 0;
+      const gapToIndustry = d.kpis.esgScore - d.kpis.industryAverage;
+      const percentileRank = clamp(Math.round((d.kpis.esgScore / 100) * 100 - (gapToIndustry < 0 ? Math.abs(gapToIndustry) / 2 : -gapToIndustry / 3)), 1, 99);
+      const topRisks = [...d.risks].sort((a, b) => (b.likelihood * b.impact) - (a.likelihood * a.impact)).slice(0, 5);
+      const readiness = weightedScore >= 80 ? 'Board-ready' : weightedScore >= 70 ? 'Needs targeted uplift' : 'Transformation required';
+      const maturityScore = Math.round((weightedScore * 0.55) + (d.kpis.esgROI * 10) + ((100 - Math.max(0, -gapToIndustry)) * 0.15));
+      const baseEmissions = d.environmental.yearlyEmissions[0];
+      const latestEmissions = d.environmental.yearlyEmissions.at(-1);
+      const reductionAchieved = baseEmissions ? ((baseEmissions - latestEmissions) / baseEmissions) * 100 : 0;
+      const targetYearSpan = d.environmental.netZeroTargetYear - d.environmental.baselineYear;
+      const annualReductionNeeded = targetYearSpan > 0 ? latestEmissions / (d.environmental.netZeroTargetYear - state.selectedYear || 1) : 0;
+      return { weightedScore, totalEmissions, scope3Share, gapToIndustry, percentileRank, topRisks, readiness, maturityScore, reductionAchieved, annualReductionNeeded };
+    }
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function renderKPIs(derived) {
+      const d = state.raw;
+      setText('kpiEsgScore', formatNumber(d.kpis.esgScore));
+      setText('kpiEsgDelta', `${derived.weightedScore > d.kpis.previousEsgScore ? '+' : ''}${formatNumber(d.kpis.esgScore - d.kpis.previousEsgScore, 1)} vs prior year`);
+      setText('kpiEmissions', formatNumber(derived.totalEmissions));
+      setText('kpiRoi', `${formatNumber(d.kpis.esgROI, 1)}x`);
+      setText('kpiCriticalRisks', String(derived.topRisks.length));
+      setText('readinessBadge', derived.readiness);
+      setText('maturityScore', formatNumber(derived.maturityScore));
+      setText('maturityLabel', derived.maturityScore >= 80 ? 'Integrated leadership maturity' : derived.maturityScore >= 70 ? 'Managed maturity' : 'Developing maturity');
+      document.getElementById('boardMetric').textContent = `${formatNumber(d.governance.boardOversight)}/100`;
+      document.getElementById('confidenceMetric').textContent = `${formatNumber((d.governance.boardOversight + d.governance.assurance + d.governance.ethicsCompliance) / 3, 1)}%`;
+      document.getElementById('humanCapitalMetric').textContent = `${formatNumber((d.social.employeeWellbeing + d.social.retention + d.social.diversityInclusion) / 3, 1)} /100`;
+      document.getElementById('productivityMetric').textContent = `${formatNumber((d.kpis.esgROI * d.social.trainingDevelopment) / 25, 1)}%`;
+      document.getElementById('kpiEmissionsNote').textContent = `${formatNumber(derived.scope3Share, 1)}% from Scope 3`; 
+      document.getElementById('kpiRoiNote').textContent = `${formatNumber(Math.max(0, d.kpis.esgScore - 60) * 0.12, 1)} pts value uplift proxy`;
+      document.getElementById('kpiRiskNote').textContent = `${derived.topRisks[0]?.name || 'No risks loaded'} highest priority`;
+    }
+
+    function recommendationItems(derived) {
+      const items = [];
+      if (derived.scope3Share > 60) items.push('Prioritize supplier engagement and procurement decarbonization because Scope 3 dominates the footprint.');
+      if (derived.gapToIndustry < 0) items.push(`Close a ${formatNumber(Math.abs(derived.gapToIndustry), 1)}-point ESG gap by targeting governance assurance and workforce inclusion first.`);
+      if (state.raw.governance.cyberRisk < 75) items.push('Upgrade cyber governance controls and board-level oversight to improve ISSB-aligned risk resilience.');
+      if (state.raw.environmental.renewableEnergy < 50) items.push('Accelerate renewable PPAs or on-site generation to unlock a fast reduction in Scope 2 emissions.');
+      if (state.raw.social.diversityInclusion < 75) items.push('Set BU-level inclusion targets and link leadership incentives to measurable social outcomes.');
+      return items.slice(0, 4);
+    }
+
+    function renderInsights(derived) {
+      const d = state.raw;
+      const items = [
+        { type: 'positive', icon: 'sparkles', text: `Weighted ESG score is ${formatNumber(derived.weightedScore, 1)}, indicating ${derived.readiness.toLowerCase()} maturity.` },
+        { type: derived.scope3Share > 65 ? 'alert' : 'positive', icon: 'cloud', text: `Scope 3 contributes ${formatNumber(derived.scope3Share, 1)}% of total emissions, making value-chain interventions the highest leverage decarbonization lever.` },
+        { type: derived.gapToIndustry < 0 ? 'risk' : 'positive', icon: 'line-chart', text: derived.gapToIndustry < 0 ? `Current ESG score is ${formatNumber(Math.abs(derived.gapToIndustry), 1)} points below industry average.` : `Current ESG score is ${formatNumber(derived.gapToIndustry, 1)} points above industry average.` },
+        { type: 'alert', icon: 'target', text: `Current emissions reduction achieved is ${formatNumber(derived.reductionAchieved, 1)}% versus a ${d.environmental.targetReductionPct}% target.` },
+        { type: 'risk', icon: 'shield-alert', text: `${derived.topRisks[0]?.name || 'Primary enterprise risk'} is the most critical exposure based on combined likelihood and impact.` }
+      ];
+      els.insightsPanel.innerHTML = items.map(item => `
+        <div class="${item.type === 'positive' ? 'insight-positive' : item.type === 'alert' ? 'insight-alert' : 'insight-risk'} glass-strong rounded-[20px] p-4">
+          <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-white/70 border border-slate-200/80 flex items-center justify-center"><i data-lucide="${item.icon}" class="w-5 h-5 text-teal-300"></i></div>
+            <p class="text-sm text-slate-700 leading-6">${item.text}</p>
+          </div>
+        </div>
+      `).join('');
+      els.recommendationsList.innerHTML = recommendationItems(derived).map(text => `<li class="glass rounded-[20px] px-4 py-3 border border-slate-200/80">${text}</li>`).join('');
+      lucide.createIcons();
+    }
+
+    function getChartTheme() {
+      const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+      return {
+        text: dark ? '#e2e8f0' : '#0f172a',
+        muted: dark ? '#94a3b8' : '#475569',
+        grid: dark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.08)',
+        palette: ['#14b8a6', '#38bdf8', '#f59e0b', '#22c55e', '#ef4444', '#a78bfa']
+      };
+    }
+
+    function chart(elId) {
+      if (!state.charts[elId]) state.charts[elId] = echarts.init(document.getElementById(elId));
+      return state.charts[elId];
+    }
+
+    function renderCharts(derived) {
+      const d = state.raw;
+      const theme = getChartTheme();
+      const years = d.years;
+      const total = derived.totalEmissions;
+      const s1 = d.environmental.scopeEmissions.scope1;
+      const s2 = d.environmental.scopeEmissions.scope2;
+      const s3 = d.environmental.scopeEmissions.scope3;
+      const scopeScale = years.map((_, idx) => 0.9 + idx * 0.03);
+
+      chart('scopeChart').setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis' },
+        legend: { textStyle: { color: theme.muted } },
+        grid: { left: 40, right: 20, top: 50, bottom: 30 },
+        xAxis: { type: 'category', data: years, axisLine: { lineStyle: { color: theme.grid } }, axisLabel: { color: theme.muted } },
+        yAxis: { type: 'value', axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [
+          { name: 'Scope 1', type: 'bar', stack: 'emissions', data: scopeScale.map(f => Math.round(s1 * f)), itemStyle: { color: theme.palette[3], borderRadius: [8,8,0,0] } },
+          { name: 'Scope 2', type: 'bar', stack: 'emissions', data: scopeScale.map(f => Math.round(s2 * (1 - ((f - 0.9) * 0.5)))), itemStyle: { color: theme.palette[1] } },
+          { name: 'Scope 3', type: 'bar', stack: 'emissions', data: scopeScale.map(f => Math.round(s3 * f)), itemStyle: { color: theme.palette[0] } }
+        ]
+      });
+
+      chart('intensityChart').setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis' },
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: years, axisLabel: { color: theme.muted }, axisLine: { lineStyle: { color: theme.grid } } },
+        yAxis: { type: 'value', axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [{
+          type: 'line', smooth: true, data: d.environmental.yearlyIntensity,
+          lineStyle: { width: 3, color: theme.palette[1] }, itemStyle: { color: theme.palette[1] },
+          areaStyle: { color: 'rgba(56,189,248,0.12)' }
+        }]
+      });
+
+      const baseline = d.environmental.yearlyEmissions[0];
+      const targetYears = [];
+      const trajectory = [];
+      const targetLine = [];
+      for (let y = d.environmental.baselineYear; y <= d.environmental.netZeroTargetYear; y++) {
+        targetYears.push(y);
+        const idx = years.indexOf(y);
+        trajectory.push(idx > -1 ? d.environmental.yearlyEmissions[idx] : null);
+        const progress = (y - d.environmental.baselineYear) / (d.environmental.netZeroTargetYear - d.environmental.baselineYear);
+        targetLine.push(Math.max(0, baseline * (1 - progress)));
+      }
+      chart('trajectoryChart').setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis' },
+        legend: { top: 0, textStyle: { color: theme.muted } },
+        grid: { left: 50, right: 20, top: 40, bottom: 30 },
+        xAxis: { type: 'category', data: targetYears, axisLabel: { color: theme.muted }, axisLine: { lineStyle: { color: theme.grid } } },
+        yAxis: { type: 'value', axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [
+          { name: 'Actual / estimated', type: 'line', connectNulls: true, smooth: true, data: trajectory, lineStyle: { width: 3, color: theme.palette[0] }, itemStyle: { color: theme.palette[0] } },
+          { name: 'Net zero pathway', type: 'line', smooth: true, data: targetLine, lineStyle: { width: 2, type: 'dashed', color: theme.palette[2] }, itemStyle: { color: theme.palette[2] } }
+        ]
+      });
+
+      const socialAxes = [
+        ['Wellbeing', d.social.employeeWellbeing],
+        ['Diversity', d.social.diversityInclusion],
+        ['Training', d.social.trainingDevelopment],
+        ['Safety', d.social.healthSafety],
+        ['Retention', d.social.retention]
+      ];
+      chart('socialRadarChart').setOption({
+        radar: { indicator: socialAxes.map(([name]) => ({ name, max: 100 })), splitLine: { lineStyle: { color: theme.grid } }, splitArea: { areaStyle: { color: ['transparent'] } }, axisName: { color: theme.muted } },
+        series: [{ type: 'radar', data: [{ value: socialAxes.map(([,v]) => v), areaStyle: { color: 'rgba(20,184,166,0.20)' }, lineStyle: { color: theme.palette[0], width: 2 }, itemStyle: { color: theme.palette[0] } }] }]
+      });
+
+      const contrib = [
+        { name: 'Environmental', value: d.kpis.environmental * 0.4 },
+        { name: 'Social', value: d.kpis.social * 0.3 },
+        { name: 'Governance', value: d.kpis.governance * 0.3 }
+      ];
+      chart('waterfallChart').setOption({
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: contrib.map(d => d.name), axisLabel: { color: theme.muted } },
+        yAxis: { type: 'value', axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [{ type: 'bar', data: contrib.map((item, idx) => ({ value: Number(item.value.toFixed(1)), itemStyle: { color: theme.palette[idx] } })), barWidth: '40%', itemStyle: { borderRadius: [10,10,0,0] } }]
+      });
+
+      chart('roiChart').setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: ['ESG Score', 'ROI', 'Human Capital', 'Governance Confidence'], axisLabel: { color: theme.muted, rotate: 20 } },
+        yAxis: { type: 'value', axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [{ type: 'bar', data: [d.kpis.esgScore, d.kpis.esgROI * 20, (d.social.employeeWellbeing + d.social.retention)/2, (d.governance.boardOversight + d.governance.assurance)/2], itemStyle: { color: params => theme.palette[params.dataIndex % theme.palette.length], borderRadius: [10,10,0,0] } }]
+      });
+
+      chart('governanceChart').setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: ['Board', 'Ethics', 'Cyber', 'Policy', 'Assurance'], axisLabel: { color: theme.muted } },
+        yAxis: { type: 'value', max: 100, axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [{ type: 'line', smooth: true, data: [d.governance.boardOversight, d.governance.ethicsCompliance, d.governance.cyberRisk, d.governance.policyMaturity, d.governance.assurance], areaStyle: { color: 'rgba(167,139,250,0.15)' }, lineStyle: { color: theme.palette[5], width: 3 }, itemStyle: { color: theme.palette[5] } }]
+      });
+
+      chart('benchmarkChart').setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 40, right: 20, top: 30, bottom: 40 },
+        xAxis: { type: 'category', data: d.benchmarking.map(item => item.entity), axisLabel: { color: theme.muted, rotate: 20 } },
+        yAxis: { type: 'value', max: 100, axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [{ type: 'bar', data: d.benchmarking.map(item => ({ value: item.score, itemStyle: { color: item.entity === d.company ? theme.palette[0] : 'rgba(148,163,184,0.6)', borderRadius: [10,10,0,0] } })) }]
+      });
+
+      const baselineReduction = d.targets.find(t => /emissions/i.test(t.name)) || d.targets[0];
+      const forecastYears = [state.selectedYear, state.selectedYear + 1, state.selectedYear + 2, state.selectedYear + 3, state.selectedYear + 4];
+      const slope = derived.reductionAchieved / Math.max(1, d.years.length - 1);
+      const forecastSeries = forecastYears.map((year, idx) => Number((derived.reductionAchieved + slope * idx).toFixed(1)));
+      chart('forecastChart').setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { textStyle: { color: theme.muted } },
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: forecastYears, axisLabel: { color: theme.muted } },
+        yAxis: { type: 'value', max: Math.max(100, baselineReduction.target + 10), axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [
+          { name: 'Projected reduction', type: 'line', smooth: true, data: forecastSeries, lineStyle: { color: theme.palette[0], width: 3 }, itemStyle: { color: theme.palette[0] }, areaStyle: { color: 'rgba(20,184,166,0.15)' } },
+          { name: 'Target', type: 'line', data: forecastYears.map(() => baselineReduction.target), lineStyle: { color: theme.palette[2], type: 'dashed', width: 2 }, symbol: 'none' }
+        ]
+      });
+    }
+
+    function renderBenchmarking(derived) {
+      const d = state.raw;
+      const sorted = [...d.benchmarking].sort((a, b) => b.score - a.score);
+      const companyRow = sorted.findIndex(item => item.entity === d.company || item.entity.toLowerCase().includes('aurora'));
+      setText('percentileRank', `${derived.percentileRank}th`);
+      setText('industryGap', `${derived.gapToIndustry >= 0 ? '+' : ''}${formatNumber(derived.gapToIndustry, 1)}`);
+      setText('peerPosition', `#${companyRow + 1} / ${sorted.length}`);
+      els.benchmarkTableBody.innerHTML = sorted.map((item, idx) => `
+        <tr class="border-t border-slate-200/80 ${item.entity === d.company ? 'bg-teal-400/8' : ''}">
+          <td class="px-4 py-3">${item.entity}</td>
+          <td class="px-4 py-3 font-semibold">${formatNumber(item.score)}</td>
+          <td class="px-4 py-3 ${item.score - d.kpis.esgScore > 0 ? 'text-amber-300' : 'text-emerald-300'}">${item.entity === d.company ? 'Baseline' : `${item.score > d.kpis.esgScore ? '+' : ''}${formatNumber(item.score - d.kpis.esgScore, 1)}`}</td>
+          <td class="px-4 py-3">${idx + 1}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderRiskAnalytics(derived) {
+      const d = state.raw;
+      const bucketMap = new Map();
+      d.risks.forEach(risk => {
+        const key = `${risk.impact}-${risk.likelihood}`;
+        const arr = bucketMap.get(key) || [];
+        arr.push(risk.name);
+        bucketMap.set(key, arr);
+      });
+      const cells = [];
+      for (let impact = 5; impact >= 1; impact--) {
+        for (let likelihood = 1; likelihood <= 5; likelihood++) {
+          const key = `${impact}-${likelihood}`;
+          const risks = bucketMap.get(key) || [];
+          const score = impact * likelihood;
+          const bg = score >= 20 ? 'rgba(239,68,68,0.35)' : score >= 12 ? 'rgba(245,158,11,0.28)' : score >= 6 ? 'rgba(56,189,248,0.24)' : 'rgba(148,163,184,0.12)';
+          cells.push(`<div class="heat-cell" style="background:${bg}" title="${risks.join(', ') || 'No mapped risk'}">${risks.length ? risks[0] : `${impact}×${likelihood}`}</div>`);
+        }
+      }
+      els.riskHeatmap.innerHTML = cells.join('');
+      els.topRisksList.innerHTML = derived.topRisks.map((risk, index) => `
+        <div class="glass-strong rounded-[18px] p-4 flex items-start justify-between gap-4">
+          <div>
+            <p class="font-semibold">${index + 1}. ${risk.name}</p>
+            <p class="text-sm text-slate-500 mt-1">${risk.category} risk · Likelihood ${risk.likelihood}/5 · Impact ${risk.impact}/5</p>
+          </div>
+          <div class="text-right">
+            <div class="text-xl font-display font-extrabold ${risk.impact * risk.likelihood >= 16 ? 'text-rose-300' : 'text-amber-300'}">${risk.impact * risk.likelihood}</div>
+            <div class="text-xs text-slate-500">risk score</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderTargets(derived) {
+      const items = state.raw.targets.map(target => {
+        const progress = clamp((target.current / target.target) * 100, 0, 100);
+        const projectedYear = state.selectedYear + Math.ceil((target.target - target.current) / Math.max(1, (target.current / Math.max(1, state.raw.years.length - 1))));
+        return `
+          <div class="glass rounded-[20px] p-4 border border-slate-200/80">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div>
+                <p class="font-semibold">${target.name}</p>
+                <p class="text-sm text-slate-500">Target ${target.target}${target.unit} by ${target.deadline}</p>
+              </div>
+              <div class="text-right">
+                <div class="text-xl font-display font-extrabold">${formatNumber(target.current)}${target.unit}</div>
+                <div class="text-xs text-slate-500">Forecast: ${projectedYear <= target.deadline ? 'On track' : 'At risk'}</div>
+              </div>
+            </div>
+            <div class="progress-track rounded-full h-3 overflow-hidden mb-2"><div class="h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-400" style="width:${progress}%"></div></div>
+            <div class="flex items-center justify-between text-xs text-slate-500"><span>${formatNumber(progress,1)}% complete</span><span>${target.deadline - state.selectedYear} years remaining</span></div>
+          </div>
+        `;
+      }).join('');
+      els.targetsContainer.innerHTML = items;
+    }
+
+    function renderScenario() {
+      const sliderValue = Number(els.renewableSlider.value);
+      const d = state.raw;
+      const baselineRenewable = d.environmental.renewableEnergy;
+      const scope2 = d.environmental.scopeEmissions.scope2;
+      const improvement = Math.max(0, sliderValue - baselineRenewable);
+      const reductionFactor = improvement * 0.012;
+      const adjustedScope2 = Math.max(0, scope2 * (1 - reductionFactor));
+      const adjustedTotal = d.environmental.scopeEmissions.scope1 + d.environmental.scopeEmissions.scope3 + adjustedScope2;
+      const baselineTotal = Object.values(d.environmental.scopeEmissions).reduce((a,b)=>a+b,0);
+      const reduction = baselineTotal ? ((baselineTotal - adjustedTotal) / baselineTotal) * 100 : 0;
+      els.renewableLabel.textContent = `${sliderValue}%`;
+      setText('scenarioScope2', `${formatNumber(adjustedScope2)} tCO2e`);
+      setText('scenarioTotal', `${formatNumber(adjustedTotal)} tCO2e`);
+      setText('scenarioReduction', `${formatNumber(reduction,1)}%`);
+      const theme = getChartTheme();
+      chart('scenarioChart').setOption({
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: ['Baseline total', 'Scenario total', 'Baseline Scope 2', 'Scenario Scope 2'], axisLabel: { color: theme.muted, rotate: 10 } },
+        yAxis: { type: 'value', axisLabel: { color: theme.muted }, splitLine: { lineStyle: { color: theme.grid } } },
+        series: [{ type: 'bar', data: [baselineTotal, adjustedTotal, scope2, adjustedScope2].map((value, idx) => ({ value: Math.round(value), itemStyle: { color: idx % 2 === 0 ? 'rgba(148,163,184,0.7)' : theme.palette[0], borderRadius: [10,10,0,0] } })) }]
+      });
+    }
+
+    function renderModal(metric) {
+      const d = state.raw;
+      const derived = getDerivedMetrics();
+      const views = {
+        esgScore: {
+          title: 'Composite ESG score breakdown',
+          description: 'Weighted performance across environmental, social, and governance pillars.',
+          body: [
+            ['Environmental contribution', `${formatNumber(d.kpis.environmental * 0.4, 1)} points`],
+            ['Social contribution', `${formatNumber(d.kpis.social * 0.3, 1)} points`],
+            ['Governance contribution', `${formatNumber(d.kpis.governance * 0.3, 1)} points`],
+            ['Weighted score', `${formatNumber(derived.weightedScore, 1)} / 100`]
+          ]
+        },
+        emissions: {
+          title: 'Emissions drill-down',
+          description: 'Scope-level exposure and decarbonization emphasis.',
+          body: Object.entries(d.environmental.scopeEmissions).map(([k, v]) => [k.toUpperCase(), `${formatNumber(v)} tCO2e`])
+        },
+        roi: {
+          title: 'ESG ROI decomposition',
+          description: 'Illustrative value capture linked to ESG performance.',
+          body: [
+            ['Current ESG ROI', `${formatNumber(d.kpis.esgROI,1)}x`],
+            ['Human capital proxy uplift', `${formatNumber((d.social.employeeWellbeing + d.social.trainingDevelopment) / 20,1)}%`],
+            ['Brand / market trust proxy', `${formatNumber((d.kpis.governance + d.kpis.social) / 2,1)} /100`],
+            ['Efficiency opportunity', `${formatNumber((100 - d.environmental.yearlyIntensity.at(-1) * 100),1)} index points`]
+          ]
+        },
+        criticalRisk: {
+          title: 'Critical risk exposure',
+          description: 'Highest-scoring enterprise ESG risks sorted by impact and likelihood.',
+          body: derived.topRisks.map(r => [r.name, `Risk score ${r.impact * r.likelihood}`])
+        }
+      };
+      const view = views[metric];
+      els.modalTitle.textContent = view.title;
+      els.modalDescription.textContent = view.description;
+      els.modalBody.innerHTML = view.body.map(([label, value]) => `
+        <div class="glass-strong rounded-[20px] p-4 flex items-center justify-between gap-4">
+          <span class="text-slate-700">${label}</span>
+          <span class="font-semibold">${value}</span>
+        </div>
+      `).join('');
+      els.kpiModal.classList.remove('hidden');
+      els.kpiModal.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function initModal() {
+      document.querySelectorAll('[data-kpi]').forEach(btn => btn.addEventListener('click', () => renderModal(btn.dataset.kpi)));
+      document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+      els.kpiModal.addEventListener('click', (e) => { if (e.target === els.kpiModal) closeModal(); });
+    }
+    function closeModal() {
+      els.kpiModal.classList.add('hidden');
+      els.kpiModal.classList.remove('flex');
+    }
+
+    function initTheme() {
+      const toggle = document.getElementById('themeToggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      state.uiTheme = systemDark ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', state.uiTheme);
+      function paintToggle() {
+        toggle.innerHTML = state.uiTheme === 'dark'
+          ? '<i data-lucide="sun-medium" class="w-5 h-5 text-amber-300"></i>'
+          : '<i data-lucide="moon-star" class="w-5 h-5 text-slate-700"></i>';
+        lucide.createIcons();
+      }
+      paintToggle();
+      toggle.addEventListener('click', () => {
+        state.uiTheme = state.uiTheme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', state.uiTheme);
+        paintToggle();
+        setTimeout(() => Object.values(state.charts).forEach(instance => instance.resize()), 10);
+        renderAll();
+      });
+    }
+
+    function initNavigation() {
+      const links = [...document.querySelectorAll('[data-nav]')];
+      const sections = links.map(link => document.querySelector(link.getAttribute('href')));
+      const onScroll = () => {
+        let current = sections[0]?.id;
+        sections.forEach(section => {
+          if (section && section.getBoundingClientRect().top < 180) current = section.id;
+        });
+        links.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${current}`));
+      };
+      document.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    }
+
+    function initLanding() {
+      const hide = () => els.landingScreen.classList.add('hidden-screen');
+      document.getElementById('enterDashboardBtn').addEventListener('click', hide);
+      document.getElementById('previewMetricsBtn').addEventListener('click', () => {
+        hide();
+        document.getElementById('overview').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    async function exportPdf() {
+      const target = document.querySelector('main');
+      const canvas = await html2canvas(target, { backgroundColor: '#020617', scale: 1.2, useCORS: true });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'pt', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+      const imgWidth = canvas.width * ratio;
+      const imgHeight = canvas.height * ratio;
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 20, 20, imgWidth - 40, imgHeight - 40);
+      pdf.save('esg-intelligence-summary.pdf');
+    }
+
+    function exportExcel() {
+      const d = state.raw;
+      const wb = XLSX.utils.book_new();
+      const summary = [
+        ['Company', d.company],
+        ['ESG Score', d.kpis.esgScore],
+        ['Environmental Score', d.kpis.environmental],
+        ['Social Score', d.kpis.social],
+        ['Governance Score', d.kpis.governance],
+        ['ESG ROI', d.kpis.esgROI],
+        ['Industry Average', d.kpis.industryAverage]
+      ];
+      const emissions = [['Metric','Value'], ...Object.entries(d.environmental.scopeEmissions), ...d.environmental.yearlyEmissions.map((value, idx) => [`Year ${d.years[idx]} emissions`, value])];
+      const risks = [['Risk','Likelihood','Impact','Category'], ...d.risks.map(r => [r.name, r.likelihood, r.impact, r.category])];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Summary');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(emissions), 'Emissions');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(risks), 'Risks');
+      XLSX.writeFile(wb, 'esg-intelligence-analytics.xlsx');
+    }
+
+    function initExports() {
+      document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
+      document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
+    }
+
+    function renderAll() {
+      const derived = getDerivedMetrics();
+      renderKPIs(derived);
+      renderInsights(derived);
+      renderCharts(derived);
+      renderBenchmarking(derived);
+      renderRiskAnalytics(derived);
+      renderTargets(derived);
+      renderScenario();
+      lucide.createIcons();
+      requestAnimationFrame(() => Object.values(state.charts).forEach(instance => instance.resize()));
+    }
+
+    function initScenario() {
+      els.renewableSlider.value = state.raw.environmental.renewableEnergy;
+      els.renewableSlider.addEventListener('input', renderScenario);
+    }
+
+    function initResize() {
+      window.addEventListener('resize', () => Object.values(state.charts).forEach(instance => instance.resize()));
+    }
+
+    async function boot() {
+      await loadData();
+      initTheme();
+      initFilters();
+      initModal();
+      initNavigation();
+      initScenario();
+      initExports();
+      initLanding();
+      renderAll();
+      initResize();
+      lucide.createIcons();
+    }
+
+    boot();
+  </script>
+</body>
+</html>
